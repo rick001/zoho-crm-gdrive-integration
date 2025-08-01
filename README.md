@@ -38,18 +38,17 @@ Copy the example environment file and configure your settings:
 cp env.example .env
 ```
 
-Edit `.env` with your initial Zoho credentials (you'll get the refresh token in the next step):
+Edit `.env` with your Zoho credentials:
 
 ```env
 # Server Configuration
 PORT=3000
 NODE_ENV=development
 
-# Zoho CRM Configuration (Initial Setup)
+# Zoho CRM Configuration
 ZOHO_CLIENT_ID=your_zoho_client_id
 ZOHO_CLIENT_SECRET=your_zoho_client_secret
 ZOHO_REDIRECT_URI=https://zoho.techlab.live/oauth/callback
-# ZOHO_REFRESH_TOKEN=your_zoho_refresh_token  # You'll get this in step 4.2
 
 # Google Drive Configuration
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.com
@@ -97,7 +96,7 @@ WEBHOOK_SECRET=your_webhook_secret
    - Copy the **Client ID** and **Client Secret**
    - Add them to your `.env` file
 
-#### 4.2 Get Refresh Token (Automated Method)
+#### 4.2 Complete Zoho Setup (Automated Method)
 
 1. **Set up your credentials** in `.env` (you already did this in step 2):
    ```env
@@ -111,7 +110,7 @@ WEBHOOK_SECRET=your_webhook_secret
    npm run dev
    ```
 
-3. **Run the automated token generator**:
+3. **Run the automated setup**:
    ```bash
    npm run get-token
    ```
@@ -122,12 +121,9 @@ WEBHOOK_SECRET=your_webhook_secret
    - Authorize the application
    - Copy the authorization code from the redirect URL
    - Paste it back into the script
-   - The script will give you the refresh token
+   - The script will give you the complete `.env` configuration
 
-5. **Add the refresh token** to your `.env` file:
-   ```env
-   ZOHO_REFRESH_TOKEN=your_refresh_token_here
-   ```
+5. **Update your `.env` file** with the complete configuration provided by the script
 
 #### 4.3 Manual OAuth2 Flow (Alternative)
 
@@ -277,9 +273,8 @@ zoho-to-gdrive/
 
 2. **Zoho Authentication Errors**:
    - Verify your client ID and secret
-   - Check that the refresh token is valid (if you have one)
    - Ensure the redirect URI matches exactly
-   - Use `npm run get-token` to get or regenerate tokens
+   - Use `npm run get-token` to complete the OAuth2 setup
 
 3. **Webhook Not Receiving Data**:
    - Check that the webhook URL is accessible
@@ -298,9 +293,9 @@ Enable debug logging by setting:
 NODE_ENV=development
 ```
 
-### Quick Token Refresh
+### Quick OAuth2 Setup
 
-If you don't have a refresh token or it expires, get a new one:
+If you need to complete or redo the OAuth2 setup:
 ```bash
 npm run get-token
 ```
@@ -312,7 +307,7 @@ npm run get-token
 3. **HTTPS**: Always use HTTPS in production
 4. **Rate Limiting**: Consider implementing rate limiting for the webhook endpoint
 5. **Token Security**: Store tokens securely and rotate them regularly
-6. **OAuth2 Security**: Keep refresh tokens secure and regenerate if compromised
+6. **OAuth2 Security**: Keep OAuth2 credentials secure and regenerate if compromised
 
 ## Contributing
 
@@ -345,7 +340,7 @@ npm install
 cp env.example .env
 # Edit .env with your Zoho Client ID and Client Secret
 
-# Get Zoho refresh token (automated)
+# Complete Zoho OAuth2 setup (automated)
 npm run get-token
 
 # Start development server
