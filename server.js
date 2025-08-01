@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const axios = require('axios');
 require('dotenv').config();
 
 const { createGoogleDriveFolder } = require('./utils/googleDrive');
@@ -10,6 +11,13 @@ const config = require('./config/deployment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Token storage (in production, use a database)
+let tokenStore = {
+  accessToken: null,
+  refreshToken: null,
+  expiresAt: null
+};
 
 // Middleware
 app.use(helmet());
@@ -25,7 +33,9 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       webhook: '/zoho-webhook',
-      health: '/health'
+      health: '/health',
+      oauth: '/oauth/callback',
+      authStatus: '/auth/status'
     }
   });
 });
@@ -35,7 +45,7 @@ app.get('/health', (req, res) => {
 });
 
 // OAuth callback endpoint for Zoho
-app.get('/oauth/callback', (req, res) => {
+app.get('/oauth/callback', async (req, res) => {
   const { code, error } = req.query;
   
   if (error) {
@@ -54,15 +64,62 @@ app.get('/oauth/callback', (req, res) => {
   
   console.log('✅ OAuth callback received with code:', code);
   
+  try {
+    // Exchange authorization code for tokens
+    const tokenResponse = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        code: code
+      }), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+
+    // Store tokens
+    tokenStore = {
+      accessToken: tokenResponse.data.access_token,
+      refreshToken: tokenResponse.data.refresh_token,
+      expiresAt: Date.now() + (tokenResponse.data.expires_in * 1000)
+    };
+
+    console.log('✅ Tokens obtained and stored successfully');
+    
+    res.json({
+      success: true,
+      message: 'OAuth authorization completed successfully!',
+      tokensReceived: true,
+      expiresIn: tokenResponse.data.expires_in,
+      instructions: [
+        'Tokens have been stored in memory',
+        'Use /auth/status to check token status',
+        'The refresh token is long-lived and will be used for future requests'
+      ]
+    });
+    
+  } catch (error) {
+    console.error('❌ Error exchanging code for tokens:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to exchange authorization code for tokens',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Auth status endpoint
+app.get('/auth/status', (req, res) => {
+  const hasTokens = !!(tokenStore.accessToken && tokenStore.refreshToken);
+  const isExpired = tokenStore.expiresAt && Date.now() > tokenStore.expiresAt;
+  
   res.json({
-    success: true,
-    message: 'Authorization code received successfully!',
-    code: code,
-    instructions: [
-      'Copy the authorization code above',
-      'Use it with the get-zoho-token.js script',
-      'Or manually exchange it for tokens using the Zoho API'
-    ]
+    hasTokens,
+    isExpired,
+    expiresAt: tokenStore.expiresAt ? new Date(tokenStore.expiresAt).toISOString() : null,
+    hasRefreshToken: !!tokenStore.refreshToken
   });
 });
 

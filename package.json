@@ -8,7 +8,11 @@
     "dev": "nodemon server.js",
     "test": "node test-webhook.js",
     "test:webhook": "node test-webhook.js",
-    "get-token": "node get-zoho-token.js"
+    "test:oauth": "node scripts/test-oauth.js",
+    "get-token": "node get-zoho-token.js",
+    "get-token-local": "node get-zoho-token-local.js",
+    "setup-oauth": "node scripts/setup-oauth.js",
+    "check-env": "node scripts/check-env.js"
   },
   "keywords": ["zoho", "google-drive", "crm", "integration"],
   "author": "",

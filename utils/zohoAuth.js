@@ -23,12 +23,18 @@ class ZohoAuth {
     try {
       console.log('🔄 Refreshing Zoho access token...');
       
-      const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', {
-        refresh_token: this.refreshToken,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        grant_type: 'refresh_token'
-      });
+      const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
+        new URLSearchParams({
+          refresh_token: this.refreshToken,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          grant_type: 'refresh_token'
+        }), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
 
       this.accessToken = response.data.access_token;
       // Set expiry to 1 hour from now (with 5 minute buffer)
@@ -54,9 +60,9 @@ class ZohoAuth {
     
     const config = {
       method: options.method || 'GET',
-      url: `https://www.zohoapis.com/crm/v3/${endpoint}`,
+      url: `https://www.zohoapis.com/crm/v2/${endpoint}`,
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
         'Content-Type': 'application/json',
         ...options.headers
       },
@@ -100,6 +106,8 @@ class ZohoAuth {
    * @returns {Promise<Object>} - Updated deal
    */
   async updateDeal(dealId, dealData) {
+    console.log(`🔄 Updating deal ${dealId} with data:`, dealData);
+    
     return this.makeRequest(`Deals/${dealId}`, {
       method: 'PUT',
       data: { data: [dealData] }
@@ -137,6 +145,22 @@ class ZohoAuth {
       method: 'POST',
       data: { criteria: searchCriteria }
     });
+  }
+
+  /**
+   * Test the connection to Zoho CRM API
+   * @returns {Promise<boolean>} - True if connection is successful
+   */
+  async testConnection() {
+    try {
+      const response = await this.makeRequest('org');
+      console.log('✅ Zoho CRM API connection successful');
+      console.log('Organization:', response.org?.[0]?.name || 'Unknown');
+      return true;
+    } catch (error) {
+      console.error('❌ Zoho CRM API connection failed:', error.message);
+      return false;
+    }
   }
 }
 
