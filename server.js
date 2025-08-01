@@ -73,14 +73,24 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('🔄 Using redirect URI:', redirectUri);
     
     // Exchange authorization code for tokens
+    const requestData = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: process.env.ZOHO_CLIENT_ID,
+      client_secret: process.env.ZOHO_CLIENT_SECRET,
+      redirect_uri: redirectUri,
+      code: code
+    });
+
+    console.log('📤 Request Data:');
+    console.log('grant_type:', 'authorization_code');
+    console.log('client_id:', process.env.ZOHO_CLIENT_ID);
+    console.log('client_secret:', process.env.ZOHO_CLIENT_SECRET ? '***SET***' : '***MISSING***');
+    console.log('redirect_uri:', redirectUri);
+    console.log('code:', code);
+    console.log('');
+
     const tokenResponse = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: process.env.ZOHO_CLIENT_ID,
-        client_secret: process.env.ZOHO_CLIENT_SECRET,
-        redirect_uri: redirectUri,
-        code: code
-      }), {
+      requestData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
@@ -91,6 +101,26 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('📊 Token Response Data:', JSON.stringify(tokenResponse.data, null, 2));
     console.log('📊 Token Response Type:', typeof tokenResponse.data);
     console.log('📊 Token Response Keys:', Object.keys(tokenResponse.data));
+
+    // Check if we got an error
+    if (tokenResponse.data.error) {
+      console.error('❌ Token exchange failed:', tokenResponse.data.error);
+      console.error('❌ This usually means:');
+      console.error('   - The redirect URI is not configured in your Zoho app');
+      console.error('   - The authorization code has expired');
+      console.error('   - The authorization code was already used');
+      console.error('   - The client credentials are incorrect');
+      
+      return res.status(400).json({
+        error: 'Token exchange failed',
+        details: tokenResponse.data.error,
+        suggestions: [
+          'Check if http://localhost:3010/oauth/callback is configured in your Zoho app',
+          'Try using the production server instead',
+          'Get a fresh authorization code'
+        ]
+      });
+    }
 
     // Store tokens
     tokenStore = {
