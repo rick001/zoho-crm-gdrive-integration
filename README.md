@@ -26,7 +26,7 @@ Before setting up this integration, you'll need:
 
 ```bash
 git clone <your-repo>
-cd zoho-to-gdrive
+cd zoho-crm-gdrive-integration
 npm install
 ```
 
@@ -80,21 +80,60 @@ WEBHOOK_SECRET=your_webhook_secret
 
 ### 4. Zoho CRM Setup
 
-1. **Create a Zoho App**:
-   - Go to [Zoho Developer Console](https://api-console.zoho.com/)
-   - Create a new client
-   - Set the redirect URI to: `https://zoho.techlab.live/oauth/callback`
-   - Note down the Client ID and Client Secret
+#### 4.1 Create Zoho App
+1. **Go to Zoho Developer Console**:
+   - Visit [Zoho API Console](https://api-console.zoho.com/)
+   - Sign in with your Zoho account
 
-2. **Get Refresh Token**:
-   - Use the authorization URL to get an authorization code
-   - Exchange the code for a refresh token
-   - Add the refresh token to your `.env` file
+2. **Create a New Client**:
+   - Click "Add Client"
+   - Choose "Server-based Applications"
+   - Fill in the details:
+     - **Client Name**: `Zoho CRM to Google Drive Integration`
+     - **Homepage URL**: `https://zoho.techlab.live/`
+     - **Authorized Redirect URIs**: `https://zoho.techlab.live/oauth/callback`
 
-3. **Set up Webhook** (Optional):
-   - In Zoho CRM, go to Setup > Developer Space > Webhooks
-   - Create a webhook for Deal creation events
-   - Set the webhook URL to: `https://zoho.techlab.live/zoho-webhook`
+3. **Get Your Credentials**:
+   - Copy the **Client ID** and **Client Secret**
+   - Add them to your `.env` file
+
+#### 4.2 Get Refresh Token (Automated Method)
+
+1. **Set up your credentials** in `.env`:
+   ```env
+   ZOHO_CLIENT_ID=your_client_id_here
+   ZOHO_CLIENT_SECRET=your_client_secret_here
+   ZOHO_REDIRECT_URI=https://zoho.techlab.live/oauth/callback
+   ```
+
+2. **Start the server** (for callback handling):
+   ```bash
+   npm run dev
+   ```
+
+3. **Run the automated token generator**:
+   ```bash
+   npm run get-token
+   ```
+
+4. **Follow the prompts**:
+   - Copy the authorization URL from the script
+   - Open it in your browser
+   - Authorize the application
+   - Copy the authorization code from the redirect URL
+   - Paste it back into the script
+   - The script will give you the refresh token
+
+5. **Add the refresh token** to your `.env` file
+
+#### 4.3 Manual OAuth2 Flow (Alternative)
+
+If you prefer manual setup, see [ZOHO_SETUP.md](ZOHO_SETUP.md) for detailed instructions.
+
+#### 4.4 Set up Webhook (Optional)
+- In Zoho CRM, go to Setup > Developer Space > Webhooks
+- Create a webhook for Deal creation events
+- Set the webhook URL to: `https://zoho.techlab.live/zoho-webhook`
 
 ### 5. Deploy the Application
 
@@ -123,6 +162,12 @@ Returns basic information about the integration.
 ### GET /health
 Health check endpoint for monitoring.
 
+### GET /oauth/callback
+OAuth2 callback endpoint for Zoho authorization.
+- Receives authorization codes from Zoho
+- Displays the code for manual token exchange
+- Used by the automated token generator
+
 ### POST /zoho-webhook
 Receives webhook events from Zoho CRM.
 
@@ -149,9 +194,30 @@ Receives webhook events from Zoho CRM.
 
 ## Testing the Integration
 
-### 1. Test Webhook Endpoint
+### 1. Test Zoho Authentication
 
 ```bash
+# Start the server
+npm run dev
+
+# In another terminal, run the token generator
+npm run get-token
+```
+
+### 2. Test Webhook Endpoint
+
+```bash
+# Test locally
+curl -X POST http://localhost:3000/zoho-webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Deal_Name": "Test Deal",
+    "Deal_ID": "123456789",
+    "Stage": "Qualification",
+    "Amount": "50000"
+  }'
+
+# Test production (after deployment)
 curl -X POST https://zoho.techlab.live/zoho-webhook \
   -H "Content-Type: application/json" \
   -d '{
@@ -162,11 +228,17 @@ curl -X POST https://zoho.techlab.live/zoho-webhook \
   }'
 ```
 
-### 2. Test Google Drive Integration
+### 3. Test Google Drive Integration
 
 The application will automatically create a folder in Google Drive when a webhook is received.
 
-### 3. Monitor Logs
+### 4. Run Automated Tests
+
+```bash
+npm test
+```
+
+### 5. Monitor Logs
 
 Check the console output for detailed logs about:
 - Webhook reception
@@ -181,6 +253,10 @@ zoho-to-gdrive/
 ├── package.json           # Dependencies and scripts
 ├── env.example           # Environment variables template
 ├── README.md             # This file
+├── ZOHO_SETUP.md         # Detailed Zoho OAuth2 setup guide
+├── DEPLOYMENT.md          # Deployment guide for various platforms
+├── get-zoho-token.js     # Automated OAuth2 token generator
+├── test-webhook.js       # Test script for webhook functionality
 └── utils/
     ├── googleDrive.js    # Google Drive API utilities
     ├── zohoAuth.js       # Zoho OAuth2 utilities
@@ -200,17 +276,30 @@ zoho-to-gdrive/
    - Verify your client ID and secret
    - Check that the refresh token is valid
    - Ensure the redirect URI matches exactly
+   - Use `npm run get-token` to regenerate tokens if needed
 
 3. **Webhook Not Receiving Data**:
    - Check that the webhook URL is accessible
    - Verify the webhook is properly configured in Zoho CRM
    - Check server logs for incoming requests
 
+4. **OAuth2 Authorization Issues**:
+   - Ensure redirect URI matches exactly in Zoho console
+   - Check that authorization code hasn't expired (10 minutes)
+   - Verify all required scopes are requested
+
 ### Debug Mode
 
 Enable debug logging by setting:
 ```env
 NODE_ENV=development
+```
+
+### Quick Token Refresh
+
+If your refresh token expires, regenerate it:
+```bash
+npm run get-token
 ```
 
 ## Security Considerations
@@ -220,6 +309,7 @@ NODE_ENV=development
 3. **HTTPS**: Always use HTTPS in production
 4. **Rate Limiting**: Consider implementing rate limiting for the webhook endpoint
 5. **Token Security**: Store tokens securely and rotate them regularly
+6. **OAuth2 Security**: Keep refresh tokens secure and regenerate if compromised
 
 ## Contributing
 
@@ -238,7 +328,29 @@ MIT License - see LICENSE file for details.
 For issues and questions:
 1. Check the troubleshooting section
 2. Review the logs for error messages
-3. Create an issue in the repository
+3. Check [ZOHO_SETUP.md](ZOHO_SETUP.md) for detailed OAuth2 setup
+4. Check [DEPLOYMENT.md](DEPLOYMENT.md) for deployment instructions
+5. Create an issue in the repository
+
+## Quick Start Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp env.example .env
+# Edit .env with your credentials
+
+# Get Zoho refresh token (automated)
+npm run get-token
+
+# Start development server
+npm run dev
+
+# Test the integration
+npm test
+```
 
 ---
 
