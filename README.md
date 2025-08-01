@@ -38,18 +38,18 @@ Copy the example environment file and configure your settings:
 cp env.example .env
 ```
 
-Edit `.env` with your actual values:
+Edit `.env` with your initial Zoho credentials (you'll get the refresh token in the next step):
 
 ```env
 # Server Configuration
 PORT=3000
 NODE_ENV=development
 
-# Zoho CRM Configuration
+# Zoho CRM Configuration (Initial Setup)
 ZOHO_CLIENT_ID=your_zoho_client_id
 ZOHO_CLIENT_SECRET=your_zoho_client_secret
-ZOHO_REFRESH_TOKEN=your_zoho_refresh_token
 ZOHO_REDIRECT_URI=https://zoho.techlab.live/oauth/callback
+# ZOHO_REFRESH_TOKEN=your_zoho_refresh_token  # You'll get this in step 4.2
 
 # Google Drive Configuration
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.com
@@ -99,7 +99,7 @@ WEBHOOK_SECRET=your_webhook_secret
 
 #### 4.2 Get Refresh Token (Automated Method)
 
-1. **Set up your credentials** in `.env`:
+1. **Set up your credentials** in `.env` (you already did this in step 2):
    ```env
    ZOHO_CLIENT_ID=your_client_id_here
    ZOHO_CLIENT_SECRET=your_client_secret_here
@@ -124,7 +124,10 @@ WEBHOOK_SECRET=your_webhook_secret
    - Paste it back into the script
    - The script will give you the refresh token
 
-5. **Add the refresh token** to your `.env` file
+5. **Add the refresh token** to your `.env` file:
+   ```env
+   ZOHO_REFRESH_TOKEN=your_refresh_token_here
+   ```
 
 #### 4.3 Manual OAuth2 Flow (Alternative)
 
@@ -274,9 +277,9 @@ zoho-to-gdrive/
 
 2. **Zoho Authentication Errors**:
    - Verify your client ID and secret
-   - Check that the refresh token is valid
+   - Check that the refresh token is valid (if you have one)
    - Ensure the redirect URI matches exactly
-   - Use `npm run get-token` to regenerate tokens if needed
+   - Use `npm run get-token` to get or regenerate tokens
 
 3. **Webhook Not Receiving Data**:
    - Check that the webhook URL is accessible
@@ -297,7 +300,7 @@ NODE_ENV=development
 
 ### Quick Token Refresh
 
-If your refresh token expires, regenerate it:
+If you don't have a refresh token or it expires, get a new one:
 ```bash
 npm run get-token
 ```
@@ -340,7 +343,7 @@ npm install
 
 # Set up environment variables
 cp env.example .env
-# Edit .env with your credentials
+# Edit .env with your Zoho Client ID and Client Secret
 
 # Get Zoho refresh token (automated)
 npm run get-token
