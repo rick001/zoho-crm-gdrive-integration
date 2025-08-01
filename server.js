@@ -65,12 +65,12 @@ app.get('/oauth/callback', async (req, res) => {
   console.log('✅ OAuth callback received with code:', code);
   
   try {
-    // Use local redirect URI when running locally
-    const redirectUri = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:3010/oauth/callback'
-      : process.env.ZOHO_REDIRECT_URI;
+    // Always use production redirect URI for production server
+    const redirectUri = 'https://zoho.techlab.live/oauth/callback';
     
     console.log('🔄 Using redirect URI:', redirectUri);
+    console.log('🔄 NODE_ENV:', process.env.NODE_ENV);
+    console.log('🔄 ZOHO_REDIRECT_URI:', process.env.ZOHO_REDIRECT_URI);
     
     // Exchange authorization code for tokens
     const requestData = new URLSearchParams({
@@ -115,9 +115,10 @@ app.get('/oauth/callback', async (req, res) => {
         error: 'Token exchange failed',
         details: tokenResponse.data.error,
         suggestions: [
-          'Check if http://localhost:3010/oauth/callback is configured in your Zoho app',
-          'Try using the production server instead',
-          'Get a fresh authorization code'
+          'Check if https://zoho.techlab.live/oauth/callback is configured in your Zoho app',
+          'Verify your client ID and client secret are correct',
+          'Get a fresh authorization code (they expire quickly)',
+          'Check that your Zoho app has the correct scopes configured'
         ]
       });
     }
