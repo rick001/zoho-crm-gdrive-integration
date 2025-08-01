@@ -33,11 +33,13 @@ This guide will help you set up the custom field in Zoho CRM to store Google Dri
 ## Step 2: Update Configuration
 
 ### 2.1 Update Deployment Date
-Edit `config/deployment.js` and set your actual deployment date:
+Edit your `.env` file and set your actual deployment date:
 
-```javascript
-DEPLOYMENT_DATE: '2025-08-01T00:00:00Z', // Change to your deployment date
+```env
+DEPLOYMENT_DATE=2025-08-01T00:00:00Z
 ```
+
+**Note**: The deployment date is now configured via environment variable for easier deployment management.
 
 ### 2.2 Verify Field Name
 Make sure the field name matches in the config:
@@ -109,8 +111,9 @@ curl -X POST https://zoho.techlab.live/zoho-webhook \
 **Problem**: Deals created before deployment are being processed
 
 **Solution**:
-1. Update the `DEPLOYMENT_DATE` in `config/deployment.js`
+1. Update the `DEPLOYMENT_DATE` in your `.env` file
 2. Make sure the date format is correct: `YYYY-MM-DDTHH:mm:ssZ`
+3. Restart your application after changing the environment variable
 
 ## Field Configuration Options
 

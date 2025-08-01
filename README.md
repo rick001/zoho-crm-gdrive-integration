@@ -38,7 +38,7 @@ Copy the example environment file and configure your settings:
 cp env.example .env
 ```
 
-Edit `.env` with your Zoho credentials:
+Edit `.env` with your credentials:
 
 ```env
 # Server Configuration
@@ -57,6 +57,9 @@ GOOGLE_DRIVE_PARENT_FOLDER_ID=your_parent_folder_id
 
 # Webhook Configuration
 WEBHOOK_SECRET=your_webhook_secret
+
+# Deployment Configuration
+DEPLOYMENT_DATE=2025-08-01T00:00:00Z
 ```
 
 ### 3. Google Drive Setup
