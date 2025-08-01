@@ -6,7 +6,7 @@
 module.exports = {
   // Set this to your actual deployment date
   // Format: YYYY-MM-DDTHH:mm:ssZ
-  DEPLOYMENT_DATE: '2024-01-15T00:00:00Z',
+  DEPLOYMENT_DATE: '2025-08-01T00:00:00Z',
   
   // Custom field name for Google Drive link in Zoho CRM
   // Make sure this field exists in your Zoho CRM
