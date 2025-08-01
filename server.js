@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const { createGoogleDriveFolder } = require('./utils/googleDrive');
 const { validateWebhook } = require('./utils/webhookValidation');
+const config = require('./config/deployment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,7 +76,7 @@ app.post('/zoho-webhook', async (req, res) => {
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
-    const { Deal_Name, Deal_ID, Stage, Amount } = req.body;
+    const { Deal_Name, Deal_ID, Stage, Amount, Created_Time } = req.body;
     
     if (!Deal_Name) {
       return res.status(400).json({ 
@@ -83,7 +84,22 @@ app.post('/zoho-webhook', async (req, res) => {
       });
     }
 
-    console.log(`Creating folder for deal: ${Deal_Name} (ID: ${Deal_ID})`);
+    // Check if deal was created after deployment date
+    const deploymentDate = new Date(config.DEPLOYMENT_DATE);
+    const dealCreatedDate = Created_Time ? new Date(Created_Time) : new Date();
+    
+    if (dealCreatedDate < deploymentDate) {
+      console.log(`Skipping deal ${Deal_ID} - created before deployment date (${config.DEPLOYMENT_DATE})`);
+      return res.status(200).json({
+        success: true,
+        message: `Deal ${Deal_ID} skipped - created before deployment date`,
+        skipped: true,
+        dealId: Deal_ID,
+        deploymentDate: config.DEPLOYMENT_DATE
+      });
+    }
+
+    console.log(`Processing deal: ${Deal_Name} (ID: ${Deal_ID}) created on ${dealCreatedDate}`);
 
     // Create folder in Google Drive
     const folderId = await createGoogleDriveFolder(Deal_Name, {
@@ -92,14 +108,40 @@ app.post('/zoho-webhook', async (req, res) => {
       amount: Amount
     });
 
-    console.log(`Successfully created folder with ID: ${folderId}`);
+    const driveLink = `https://drive.google.com/drive/folders/${folderId}`;
+    console.log(`Successfully created folder: ${driveLink}`);
+
+    // Update the deal in Zoho CRM with the Drive link
+    const zohoAuth = require('./utils/zohoAuth');
+    const updateData = {
+      id: Deal_ID,
+      [config.GOOGLE_DRIVE_LINK_FIELD]: driveLink
+    };
+
+    try {
+      // Update the custom field with Drive link
+      await zohoAuth.updateDeal(Deal_ID, updateData);
+      console.log(`Successfully updated deal ${Deal_ID} with Drive link`);
+      
+      // Append note about the folder creation
+      if (config.APPEND_NOTES) {
+        const noteContent = config.NOTE_TEMPLATE(driveLink, Deal_Name);
+        await zohoAuth.appendDealNote(Deal_ID, noteContent);
+        console.log(`Successfully appended note to deal ${Deal_ID}`);
+      }
+    } catch (updateError) {
+      console.error('Warning: Failed to update deal in Zoho CRM:', updateError.message);
+      // Continue with success response even if update fails
+    }
 
     res.status(200).json({
       success: true,
-      message: `Folder created successfully for deal: ${Deal_Name}`,
+      message: `Folder created and deal updated successfully for: ${Deal_Name}`,
       folderId: folderId,
+      driveLink: driveLink,
       dealName: Deal_Name,
-      dealId: Deal_ID
+      dealId: Deal_ID,
+      dealUpdated: true
     });
 
   } catch (error) {

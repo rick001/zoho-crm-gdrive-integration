@@ -107,6 +107,27 @@ class ZohoAuth {
   }
 
   /**
+   * Update deal notes by appending new note
+   * @param {string} dealId - Deal ID
+   * @param {string} noteContent - Note content to append
+   * @returns {Promise<Object>} - Updated deal
+   */
+  async appendDealNote(dealId, noteContent) {
+    // First get current deal to see existing notes
+    const currentDeal = await this.getDeal(dealId);
+    const existingNotes = currentDeal.data?.[0]?.Notes || '';
+    
+    const updatedNotes = existingNotes 
+      ? `${existingNotes}\n\n${noteContent}`
+      : noteContent;
+
+    return this.updateDeal(dealId, {
+      id: dealId,
+      Notes: updatedNotes
+    });
+  }
+
+  /**
    * Search deals in Zoho CRM
    * @param {string} searchCriteria - Search criteria
    * @returns {Promise<Object>} - Search results
