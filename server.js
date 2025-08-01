@@ -33,6 +33,38 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// OAuth callback endpoint for Zoho
+app.get('/oauth/callback', (req, res) => {
+  const { code, error } = req.query;
+  
+  if (error) {
+    console.error('OAuth error:', error);
+    return res.status(400).json({ 
+      error: 'OAuth authorization failed', 
+      details: error 
+    });
+  }
+  
+  if (!code) {
+    return res.status(400).json({ 
+      error: 'No authorization code received' 
+    });
+  }
+  
+  console.log('✅ OAuth callback received with code:', code);
+  
+  res.json({
+    success: true,
+    message: 'Authorization code received successfully!',
+    code: code,
+    instructions: [
+      'Copy the authorization code above',
+      'Use it with the get-zoho-token.js script',
+      'Or manually exchange it for tokens using the Zoho API'
+    ]
+  });
+});
+
 // Zoho webhook endpoint
 app.post('/zoho-webhook', async (req, res) => {
   try {
