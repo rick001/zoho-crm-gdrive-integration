@@ -12,6 +12,7 @@
     "get-token": "node get-zoho-token.js",
     "get-token-local": "node get-zoho-token-local.js",
     "setup-oauth": "node scripts/setup-oauth.js",
+    "extract-token": "node scripts/extract-token.js",
     "check-env": "node scripts/check-env.js"
   },
   "keywords": ["zoho", "google-drive", "crm", "integration"],

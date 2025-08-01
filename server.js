@@ -65,13 +65,20 @@ app.get('/oauth/callback', async (req, res) => {
   console.log('✅ OAuth callback received with code:', code);
   
   try {
+    // Use local redirect URI when running locally
+    const redirectUri = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3010/oauth/callback'
+      : process.env.ZOHO_REDIRECT_URI;
+    
+    console.log('🔄 Using redirect URI:', redirectUri);
+    
     // Exchange authorization code for tokens
     const tokenResponse = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
       new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: process.env.ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
-        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        redirect_uri: redirectUri,
         code: code
       }), {
         headers: {
@@ -79,6 +86,11 @@ app.get('/oauth/callback', async (req, res) => {
         }
       }
     );
+
+    console.log('📊 Token Response Status:', tokenResponse.status);
+    console.log('📊 Token Response Data:', JSON.stringify(tokenResponse.data, null, 2));
+    console.log('📊 Token Response Type:', typeof tokenResponse.data);
+    console.log('📊 Token Response Keys:', Object.keys(tokenResponse.data));
 
     // Store tokens
     tokenStore = {
@@ -88,16 +100,20 @@ app.get('/oauth/callback', async (req, res) => {
     };
 
     console.log('✅ Tokens obtained and stored successfully');
+    console.log('🔑 REFRESH TOKEN FOR .env FILE:', tokenResponse.data.refresh_token);
+    console.log('⏰ Token expires in:', tokenResponse.data.expires_in, 'seconds');
     
     res.json({
       success: true,
       message: 'OAuth authorization completed successfully!',
       tokensReceived: true,
       expiresIn: tokenResponse.data.expires_in,
+      refreshToken: tokenResponse.data.refresh_token, // Include in response for easy copying
       instructions: [
         'Tokens have been stored in memory',
         'Use /auth/status to check token status',
-        'The refresh token is long-lived and will be used for future requests'
+        'The refresh token is long-lived and will be used for future requests',
+        'Copy the refresh token above to your .env file'
       ]
     });
     
