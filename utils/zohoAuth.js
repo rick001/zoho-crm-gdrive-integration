@@ -42,6 +42,7 @@ class ZohoAuth {
   async getAccessToken() {
     // If we have a valid access token, return it
     if (this.accessToken && this.expiresAt && Date.now() < this.expiresAt) {
+      console.log('✅ Using existing access token (not expired)');
       return this.accessToken;
     }
 
@@ -64,6 +65,7 @@ class ZohoAuth {
     try {
       console.log('🔄 Refreshing access token...');
       console.log('Token Endpoint:', `${this.accountsServer}/oauth/v2/token`);
+      console.log('Refresh Token:', this.refreshToken.substring(0, 20) + '...');
       
       const response = await axios.post(`${this.accountsServer}/oauth/v2/token`,
         new URLSearchParams({
@@ -78,6 +80,8 @@ class ZohoAuth {
         }
       );
 
+      console.log('✅ Token refresh response:', JSON.stringify(response.data, null, 2));
+
       this.accessToken = response.data.access_token;
       this.expiresAt = Date.now() + (response.data.expires_in * 1000);
 
@@ -88,6 +92,7 @@ class ZohoAuth {
       }
 
       console.log('✅ Access token refreshed successfully');
+      console.log('🔧 Current API domain:', this.apiDomain);
       return this.accessToken;
 
     } catch (error) {
@@ -102,9 +107,14 @@ class ZohoAuth {
   async makeRequest(method, endpoint, data = null) {
     const accessToken = await this.getAccessToken();
     
+    const url = `${this.apiDomain}/crm/v2/${endpoint}`;
+    console.log(`🌐 Making ${method} request to: ${url}`);
+    console.log(`🔧 Using API domain: ${this.apiDomain}`);
+    console.log(`🔑 Access token: ${accessToken.substring(0, 20)}...`);
+    
     const config = {
       method,
-      url: `${this.apiDomain}/crm/v2/${endpoint}`,
+      url,
       headers: {
         'Authorization': `Zoho-oauthtoken ${accessToken}`,
         'Content-Type': 'application/json'
@@ -113,13 +123,17 @@ class ZohoAuth {
 
     if (data) {
       config.data = data;
+      console.log('📦 Request data:', JSON.stringify(data, null, 2));
     }
 
     try {
+      console.log('🚀 Sending request...');
       const response = await axios(config);
+      console.log('✅ API request successful');
       return response.data;
     } catch (error) {
       console.error(`❌ Zoho API request failed (${method} ${endpoint}):`, error.response?.data || error.message);
+      console.error('🔍 Full error details:', error.response?.status, error.response?.statusText);
       throw error;
     }
   }
