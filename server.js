@@ -2,15 +2,6 @@ const express = require('express');
 const axios = require('axios');
 require('dotenv').config();
 
-// Try to import open package, but don't fail if it's not available
-let open;
-try {
-  open = require('open');
-} catch (error) {
-  console.log('⚠️  open package not available - browser opening disabled');
-  open = null;
-}
-
 const { createGoogleDriveFolder } = require('./utils/googleDrive');
 const { validateWebhook, extractDealInfo, logWebhookDetails } = require('./utils/webhookValidation');
 const config = require('./config/deployment');
@@ -45,10 +36,16 @@ app.get('/', (req, res) => {
   });
 });
 
-// Generate OAuth2 authorization URL and open browser
+// Generate OAuth2 authorization URL (manual process)
 app.get('/auth', (req, res) => {
   const clientId = process.env.ZOHO_CLIENT_ID;
   const redirectUri = process.env.ZOHO_REDIRECT_URI || 'https://zoho.techlab.live/oauth/callback';
+  
+  if (!clientId) {
+    return res.status(400).json({
+      error: 'ZOHO_CLIENT_ID is not set in your .env file'
+    });
+  }
   
   const authUrl = `https://accounts.zoho.com/oauth/v2/auth?` +
     `scope=ZohoCRM.modules.ALL&` +
@@ -58,24 +55,26 @@ app.get('/auth', (req, res) => {
     `prompt=consent&` +
     `redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-  // Try to open browser if open package is available
-  if (open) {
-    console.log("🔗 Opening Zoho OAuth consent screen...");
-    open(authUrl).catch(err => {
-      console.log('⚠️  Could not open browser automatically:', err.message);
-    });
-  } else {
-    console.log("🔗 Browser opening not available on this server");
-  }
+  console.log('🔗 OAuth2 Authorization URL generated');
+  console.log('=====================================');
+  console.log(authUrl);
+  console.log('=====================================');
 
   res.json({
     message: 'OAuth2 Authorization URL',
     authUrl: authUrl,
     instructions: [
-      'Copy the authUrl above and open it in your browser',
-      'Authorize the application',
-      'You will be redirected to /oauth/callback',
-      'Copy the refresh token from the response to your .env file'
+      '📋 MANUAL STEPS:',
+      '1. Copy the authUrl above',
+      '2. Open it in your browser',
+      '3. Authorize the application in Zoho',
+      '4. You will be redirected to /oauth/callback',
+      '5. Copy the refresh token from the response',
+      '6. Add ZOHO_REFRESH_TOKEN to your .env file'
+    ],
+    nextSteps: [
+      'After getting the refresh token, visit /test to verify it works',
+      'Then configure your Zoho webhook to point to /zoho-webhook'
     ]
   });
 });
