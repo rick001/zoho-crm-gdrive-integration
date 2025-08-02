@@ -160,9 +160,12 @@ app.get('/oauth/callback', async (req, res) => {
         ZOHO_REDIRECT_URI: process.env.ZOHO_REDIRECT_URI || 'https://zoho.techlab.live/oauth/callback'
       },
       instructions: [
-        'Copy the ZOHO_REFRESH_TOKEN to your .env file',
+        '✅ Tokens are now stored in memory automatically',
+        '✅ No need to manually add to .env file',
+        '✅ System will refresh tokens automatically',
         'Use /test to verify the tokens work',
-        'Use /status to check token status'
+        'Use /status to check token status',
+        'Your webhook integration is ready to use!'
       ]
     });
 

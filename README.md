@@ -37,7 +37,7 @@ Required environment variables:
 - `ZOHO_CLIENT_ID` - Your Zoho OAuth2 app client ID
 - `ZOHO_CLIENT_SECRET` - Your Zoho OAuth2 app client secret
 - `ZOHO_REDIRECT_URI` - OAuth2 redirect URI (e.g., `https://yourdomain.com/oauth/callback`)
-- `ZOHO_REFRESH_TOKEN` - OAuth2 refresh token (obtained via OAuth flow)
+- `ZOHO_REFRESH_TOKEN` - OAuth2 refresh token (optional - will be obtained automatically)
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL` - Google service account email
 - `GOOGLE_PRIVATE_KEY` - Google service account private key
 - `GOOGLE_DRIVE_PARENT_FOLDER_ID` - Google Drive parent folder ID
@@ -55,8 +55,9 @@ Visit `http://localhost:3010/auth` to get the authorization URL, then:
 1. Copy the authorization URL
 2. Open it in your browser
 3. Authorize the application in Zoho
-4. Copy the refresh token from the response
-5. Add `ZOHO_REFRESH_TOKEN` to your `.env` file
+4. **Tokens are automatically stored in memory** ✅
+5. **No need to manually add to .env file** ✅
+6. **System refreshes tokens automatically** ✅
 
 ### 5. Test the Setup
 ```bash
