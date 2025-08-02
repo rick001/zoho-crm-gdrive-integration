@@ -1,34 +1,55 @@
 const axios = require('axios');
+require('dotenv').config();
 
 class ZohoAuth {
   constructor() {
     this.clientId = process.env.ZOHO_CLIENT_ID;
     this.clientSecret = process.env.ZOHO_CLIENT_SECRET;
     this.refreshToken = process.env.ZOHO_REFRESH_TOKEN;
-    this.redirectUri = process.env.ZOHO_REDIRECT_URI;
     this.accessToken = null;
-    this.tokenExpiry = null;
+    this.expiresAt = null;
+    this.accountsServer = null; // Will be set dynamically
   }
 
   /**
-   * Get access token using refresh token
-   * @returns {Promise<string>} - Access token
+   * Set the accounts server based on the refresh token origin
+   */
+  setAccountsServer(accountsServer) {
+    this.accountsServer = accountsServer;
+    console.log('🔧 Accounts server set to:', accountsServer);
+  }
+
+  /**
+   * Get a valid access token (refresh if needed)
    */
   async getAccessToken() {
-    // Check if we have a valid token
-    if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+    // If we have a valid access token, return it
+    if (this.accessToken && this.expiresAt && Date.now() < this.expiresAt) {
       return this.accessToken;
     }
 
+    // If no refresh token, throw error
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available. Please complete OAuth2 setup first.');
+    }
+
+    // Determine accounts server if not set
+    if (!this.accountsServer) {
+      // Try to detect from refresh token format or use default
+      this.accountsServer = 'https://accounts.zoho.in';
+      console.log('🔧 Using default accounts server:', this.accountsServer);
+    }
+
     try {
-      console.log('🔄 Refreshing Zoho access token...');
+      console.log('🔄 Refreshing access token...');
+      console.log('Token Endpoint:', `${this.accountsServer}/oauth/v2/token`);
       
-      const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
+      const response = await axios.post(`${this.accountsServer}/oauth/v2/token`,
         new URLSearchParams({
-          refresh_token: this.refreshToken,
+          grant_type: 'refresh_token',
           client_id: this.clientId,
           client_secret: this.clientSecret,
-          grant_type: 'refresh_token'
+          refresh_token: this.refreshToken
         }), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -37,134 +58,100 @@ class ZohoAuth {
       );
 
       this.accessToken = response.data.access_token;
-      // Set expiry to 1 hour from now (with 5 minute buffer)
-      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - (5 * 60 * 1000);
+      this.expiresAt = Date.now() + (response.data.expires_in * 1000);
 
-      console.log('✅ Zoho access token refreshed successfully');
+      console.log('✅ Access token refreshed successfully');
       return this.accessToken;
 
     } catch (error) {
-      console.error('❌ Error refreshing Zoho access token:', error.response?.data || error.message);
-      throw new Error(`Failed to refresh Zoho access token: ${error.message}`);
+      console.error('❌ Failed to refresh access token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh access token. Please check your refresh token.');
     }
   }
 
   /**
-   * Make authenticated request to Zoho CRM API
-   * @param {string} endpoint - API endpoint
-   * @param {Object} options - Request options
-   * @returns {Promise<Object>} - API response
+   * Make an authenticated request to Zoho CRM API
    */
-  async makeRequest(endpoint, options = {}) {
+  async makeRequest(method, endpoint, data = null) {
     const accessToken = await this.getAccessToken();
     
     const config = {
-      method: options.method || 'GET',
+      method,
       url: `https://www.zohoapis.com/crm/v2/${endpoint}`,
       headers: {
         'Authorization': `Zoho-oauthtoken ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
+        'Content-Type': 'application/json'
+      }
     };
+
+    if (data) {
+      config.data = data;
+    }
 
     try {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      console.error('❌ Zoho API request failed:', error.response?.data || error.message);
-      throw new Error(`Zoho API request failed: ${error.message}`);
+      console.error(`❌ Zoho API request failed (${method} ${endpoint}):`, error.response?.data || error.message);
+      throw error;
     }
-  }
-
-  /**
-   * Get deal information from Zoho CRM
-   * @param {string} dealId - Deal ID
-   * @returns {Promise<Object>} - Deal information
-   */
-  async getDeal(dealId) {
-    return this.makeRequest(`Deals/${dealId}`);
-  }
-
-  /**
-   * Create a new deal in Zoho CRM
-   * @param {Object} dealData - Deal data
-   * @returns {Promise<Object>} - Created deal
-   */
-  async createDeal(dealData) {
-    return this.makeRequest('Deals', {
-      method: 'POST',
-      data: { data: [dealData] }
-    });
   }
 
   /**
    * Update a deal in Zoho CRM
-   * @param {string} dealId - Deal ID
-   * @param {Object} dealData - Updated deal data
-   * @returns {Promise<Object>} - Updated deal
    */
-  async updateDeal(dealId, dealData) {
-    console.log(`🔄 Updating deal ${dealId} with data:`, dealData);
+  async updateDeal(dealId, updateData) {
+    console.log(`🔄 Updating deal ${dealId}:`, updateData);
     
-    return this.makeRequest(`Deals/${dealId}`, {
-      method: 'PUT',
-      data: { data: [dealData] }
-    });
+    const data = {
+      data: [updateData]
+    };
+
+    return await this.makeRequest('PUT', `Deals/${dealId}`, data);
   }
 
   /**
-   * Update deal notes by appending new note
-   * @param {string} dealId - Deal ID
-   * @param {string} noteContent - Note content to append
-   * @returns {Promise<Object>} - Updated deal
+   * Get a deal from Zoho CRM
+   */
+  async getDeal(dealId) {
+    console.log(`📥 Getting deal ${dealId}...`);
+    return await this.makeRequest('GET', `Deals/${dealId}`);
+  }
+
+  /**
+   * Append a note to a deal
    */
   async appendDealNote(dealId, noteContent) {
-    // First get current deal to see existing notes
-    const currentDeal = await this.getDeal(dealId);
-    const existingNotes = currentDeal.data?.[0]?.Notes || '';
+    console.log(`📝 Appending note to deal ${dealId}...`);
     
-    const updatedNotes = existingNotes 
-      ? `${existingNotes}\n\n${noteContent}`
-      : noteContent;
+    const data = {
+      data: [{
+        Parent_Id: dealId,
+        Note_Title: 'Google Drive Folder Created',
+        Note_Content: noteContent
+      }]
+    };
 
-    return this.updateDeal(dealId, {
-      id: dealId,
-      Notes: updatedNotes
-    });
+    return await this.makeRequest('POST', 'Notes', data);
   }
 
   /**
-   * Search deals in Zoho CRM
-   * @param {string} searchCriteria - Search criteria
-   * @returns {Promise<Object>} - Search results
-   */
-  async searchDeals(searchCriteria) {
-    return this.makeRequest('Deals/search', {
-      method: 'POST',
-      data: { criteria: searchCriteria }
-    });
-  }
-
-  /**
-   * Test the connection to Zoho CRM API
-   * @returns {Promise<boolean>} - True if connection is successful
+   * Test the connection to Zoho CRM
    */
   async testConnection() {
     try {
-      const response = await this.makeRequest('org');
-      console.log('✅ Zoho CRM API connection successful');
+      console.log('🧪 Testing Zoho CRM connection...');
+      const response = await this.makeRequest('GET', 'org');
+      
+      console.log('✅ Zoho CRM connection successful!');
       console.log('Organization:', response.org?.[0]?.name || 'Unknown');
-      return true;
+      
+      return response;
     } catch (error) {
-      console.error('❌ Zoho CRM API connection failed:', error.message);
-      return false;
+      console.error('❌ Zoho CRM connection failed:', error.message);
+      throw error;
     }
   }
 }
 
-// Create singleton instance
-const zohoAuth = new ZohoAuth();
-
-module.exports = zohoAuth; 
+module.exports = new ZohoAuth(); 

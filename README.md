@@ -4,13 +4,13 @@ This Node.js application creates a seamless integration between Zoho CRM and Goo
 
 ## Features
 
+- ✅ **OAuth2 Authentication**: Secure authentication with Zoho CRM API
 - ✅ **Webhook Integration**: Receives deal creation events from Zoho CRM
 - ✅ **Google Drive Integration**: Creates folders using Google Drive API
-- ✅ **OAuth2 Authentication**: Secure authentication with both Zoho and Google
+- ✅ **Automatic Token Refresh**: Handles OAuth2 token refresh automatically
 - ✅ **Error Handling**: Comprehensive error handling and logging
 - ✅ **Security**: Webhook validation and secure token management
 - ✅ **Monitoring**: Health check endpoints and detailed logging
-- ✅ **Automatic Token Refresh**: Handles OAuth2 token refresh automatically
 
 ## Prerequisites
 
@@ -23,16 +23,12 @@ Before setting up this integration, you'll need:
 
 ## Quick Start
 
-### 1. Clone and Install Dependencies
-
+### 1. Install Dependencies
 ```bash
-git clone <your-repo>
-cd zoho-crm-gdrive-integration
 npm install
 ```
 
-### 2. Environment Configuration
-
+### 2. Configure Environment Variables
 Copy the example environment file and configure your settings:
 
 ```bash
@@ -42,14 +38,11 @@ cp env.example .env
 Edit `.env` with your credentials:
 
 ```env
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# Zoho CRM Configuration
-ZOHO_CLIENT_ID=your_zoho_client_id
-ZOHO_CLIENT_SECRET=your_zoho_client_secret
+# Zoho OAuth2 Configuration
+ZOHO_CLIENT_ID=your_client_id_here
+ZOHO_CLIENT_SECRET=your_client_secret_here
 ZOHO_REDIRECT_URI=https://zoho.techlab.live/oauth/callback
+ZOHO_REFRESH_TOKEN=your_refresh_token_here
 
 # Google Drive Configuration
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.com
@@ -59,46 +52,46 @@ GOOGLE_DRIVE_PARENT_FOLDER_ID=your_parent_folder_id
 # Webhook Configuration
 WEBHOOK_SECRET=your_webhook_secret
 
-# Deployment Configuration
-DEPLOYMENT_DATE=2025-08-01T00:00:00Z
+
+
+# Server Configuration
+PORT=3010
+NODE_ENV=development
 ```
 
 ### 3. OAuth2 Setup
 
 #### Option A: Automated Setup (Recommended)
 
-1. **Deploy your server** to your domain (e.g., `https://zoho.techlab.live`)
-2. **Run the setup script**:
+1. **Start the server**:
    ```bash
-   npm run setup-oauth
+   npm start
    ```
-3. **Follow the prompts** to complete the OAuth2 flow
-4. **Copy the refresh token** to your `.env` file
+
+2. **Visit the auth endpoint**:
+   ```
+   http://localhost:3010/auth
+   ```
+   (Browser will open automatically)
+
+3. **Complete the OAuth2 flow** and copy the refresh token to your `.env` file
 
 #### Option B: Manual Setup
 
 1. **Generate the authorization URL**:
    ```
-   https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL&client_id=YOUR_CLIENT_ID&response_type=code&access_type=offline&redirect_uri=https://zoho.techlab.live/oauth/callback
+   https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL&client_id=YOUR_CLIENT_ID&response_type=code&access_type=offline&prompt=consent&redirect_uri=https://zoho.techlab.live/oauth/callback
    ```
 
 2. **Open the URL** in your browser and authorize the application
 
-3. **Copy the authorization code** from the redirect URL:
-   ```
-   https://zoho.techlab.live/oauth/callback?code=AUTH_CODE
-   ```
-
-4. **Exchange the code for tokens** using the setup script:
-   ```bash
-   npm run setup-oauth
-   ```
+3. **Copy the authorization code** from the redirect URL and complete the flow
 
 ### 4. Test the Setup
 
 ```bash
 # Test OAuth2 connection
-npm run test:oauth
+npm test
 
 # Test webhook endpoint
 npm run test:webhook
@@ -123,9 +116,9 @@ npm run dev
 |--------|-------------|
 | `npm start` | Start the production server |
 | `npm run dev` | Start development server with auto-restart |
-| `npm run setup-oauth` | Interactive OAuth2 setup |
-| `npm run test:oauth` | Test OAuth2 connection and API access |
+| `npm test` | Test OAuth2 connection and API access |
 | `npm run test:webhook` | Test webhook endpoint |
+| `npm run test:deal-update` | Test complete flow (webhook → Drive folder → deal update) |
 | `npm run check-env` | Validate environment variables |
 
 ## API Endpoints
@@ -134,8 +127,10 @@ npm run dev
 |----------|--------|-------------|
 | `/` | GET | Homepage with endpoint list |
 | `/health` | GET | Health check |
-| `/auth/status` | GET | OAuth token status |
+| `/auth` | GET | Generate OAuth2 authorization URL |
 | `/oauth/callback` | GET | OAuth2 callback handler |
+| `/status` | GET | OAuth token status |
+| `/test` | GET | Test access token |
 | `/zoho-webhook` | POST | Zoho webhook receiver |
 
 ## OAuth2 Flow Details
@@ -147,12 +142,13 @@ GET https://accounts.zoho.com/oauth/v2/auth
   &client_id=YOUR_CLIENT_ID
   &response_type=code
   &access_type=offline
+  &prompt=consent
   &redirect_uri=https://zoho.techlab.live/oauth/callback
 ```
 
 ### Token Exchange
 ```
-POST https://accounts.zoho.com/oauth/v2/token
+POST https://accounts.zoho.in/oauth/v2/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=authorization_code
@@ -164,7 +160,7 @@ grant_type=authorization_code
 
 ### Token Refresh
 ```
-POST https://accounts.zoho.com/oauth/v2/token
+POST https://accounts.zoho.in/oauth/v2/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=refresh_token
@@ -216,7 +212,7 @@ Content-Type: application/json
 
 2. **Create a New Client**:
    - Click "Add Client"
-   - Choose "Self-Client" for server-to-server communication
+   - Choose "OAuth2 App" for webhook integration
    - Fill in the details:
      - **Client Name**: `Zoho CRM to Google Drive Integration`
      - **Homepage URL**: `https://zoho.techlab.live`
@@ -243,6 +239,26 @@ Content-Type: application/json
      - **Module**: Deals
      - **Events**: Create
      - **Condition**: Deal Stage = "Qualification" (or your preferred stage)
+
+## Project Structure
+
+```
+zoho-to-gdrive/
+├── server.js              # Main server with OAuth2 and webhook endpoints
+├── utils/
+│   ├── zohoAuth.js       # Zoho API authentication utilities
+│   ├── googleDrive.js    # Google Drive API utilities
+│   └── webhookValidation.js # Webhook validation utilities
+├── config/
+│   └── deployment.js     # Deployment configuration
+├── scripts/
+│   └── check-env.js      # Environment variable checker
+├── test-improved-oauth.js # OAuth2 flow test script
+├── test-webhook.js       # Webhook test script
+├── package.json
+├── README.md
+└── .env                   # Environment variables (create this)
+```
 
 ## Troubleshooting
 
@@ -271,16 +287,16 @@ Content-Type: application/json
 npm run check-env
 
 # Test OAuth2 connection
-npm run test:oauth
+npm test
 
 # Test webhook endpoint
 npm run test:webhook
 
 # Check server health
-curl https://zoho.techlab.live/health
+curl http://localhost:3010/health
 
 # Check auth status
-curl https://zoho.techlab.live/auth/status
+curl http://localhost:3010/status
 ```
 
 ## Security Best Practices
@@ -290,6 +306,7 @@ curl https://zoho.techlab.live/auth/status
 3. **Implement proper error handling** for token refresh failures
 4. **Monitor token expiration** and refresh proactively
 5. **Use HTTPS** for all OAuth2 endpoints
+6. **Validate webhook signatures** in production
 
 ## Deployment Checklist
 
@@ -309,5 +326,4 @@ If you encounter issues:
 2. Verify all environment variables are set correctly
 3. Test the OAuth2 flow manually
 4. Ensure your Zoho app has the correct permissions
-
-For detailed OAuth2 setup instructions, see [OAUTH2_SETUP.md](./OAUTH2_SETUP.md). 
+5. Verify Google Drive API is enabled and service account has proper permissions 

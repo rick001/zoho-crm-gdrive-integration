@@ -98,7 +98,7 @@ async function getFolderInfo(folderId) {
     return response.data;
   } catch (error) {
     console.error('Error getting folder info:', error);
-    throw new Error(`Failed to get folder info: ${error.message}`);
+    throw error;
   }
 }
 
@@ -116,10 +116,10 @@ async function listFolders(maxResults = 10) {
       pageSize: maxResults
     });
     
-    return response.data.files;
+    return response.data.files || [];
   } catch (error) {
     console.error('Error listing folders:', error);
-    throw new Error(`Failed to list folders: ${error.message}`);
+    throw error;
   }
 }
 

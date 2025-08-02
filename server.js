@@ -1,30 +1,25 @@
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
 const axios = require('axios');
+const open = require('open');
 require('dotenv').config();
 
 const { createGoogleDriveFolder } = require('./utils/googleDrive');
-const { validateWebhook } = require('./utils/webhookValidation');
+const { validateWebhook, extractDealInfo, logWebhookDetails } = require('./utils/webhookValidation');
 const config = require('./config/deployment');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3010;
 
-// Token storage (in production, use a database)
-let tokenStore = {
+// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Store tokens (in production, use a database)
+let tokens = {
   accessToken: null,
   refreshToken: null,
   expiresAt: null
 };
-
-// Middleware
-app.use(helmet());
-app.use(cors());
-app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.get('/', (req, res) => {
@@ -32,142 +27,183 @@ app.get('/', (req, res) => {
     message: 'Zoho CRM to Google Drive Integration',
     status: 'running',
     endpoints: {
+      auth: '/auth',
+      callback: '/oauth/callback',
+      status: '/status',
+      test: '/test',
       webhook: '/zoho-webhook',
-      health: '/health',
-      oauth: '/oauth/callback',
-      authStatus: '/auth/status'
+      health: '/health'
     }
   });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+// Generate OAuth2 authorization URL and open browser
+app.get('/auth', (req, res) => {
+  const clientId = process.env.ZOHO_CLIENT_ID;
+  const redirectUri = process.env.ZOHO_REDIRECT_URI || 'https://zoho.techlab.live/oauth/callback';
+  
+  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?` +
+    `scope=ZohoCRM.modules.ALL&` +
+    `client_id=${clientId}&` +
+    `response_type=code&` +
+    `access_type=offline&` +
+    `prompt=consent&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+  console.log("🔗 Opening Zoho OAuth consent screen...");
+  open(authUrl);
+
+  res.json({
+    message: 'OAuth2 Authorization URL',
+    authUrl: authUrl,
+    instructions: [
+      'Browser should open automatically with the authorization URL',
+      'If not, copy the authUrl above and open it manually',
+      'Authorize the application',
+      'You will be redirected to /oauth/callback'
+    ]
+  });
 });
 
-// OAuth callback endpoint for Zoho
+// OAuth2 callback endpoint with dynamic accounts-server detection
 app.get('/oauth/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, 'accounts-server': accountsServer } = req.query;
+  
+  console.log('📥 OAuth callback received');
+  console.log('Code:', code ? code.substring(0, 20) + '...' : 'None');
+  console.log('Error:', error || 'None');
+  console.log('Accounts Server:', accountsServer || 'None');
   
   if (error) {
-    console.error('OAuth error:', error);
-    return res.status(400).json({ 
-      error: 'OAuth authorization failed', 
-      details: error 
+    return res.status(400).json({
+      error: 'OAuth authorization failed',
+      details: error
     });
   }
   
-  if (!code) {
-    return res.status(400).json({ 
-      error: 'No authorization code received' 
+  if (!code || !accountsServer) {
+    return res.status(400).json({
+      error: 'Missing authorization code or accounts-server',
+      received: {
+        code: !!code,
+        accountsServer: !!accountsServer
+      }
     });
   }
-  
-  console.log('✅ OAuth callback received with code:', code);
-  
+
   try {
-    // Always use production redirect URI for production server
-    const redirectUri = 'https://zoho.techlab.live/oauth/callback';
+    console.log('🔄 Exchanging code for tokens...');
+    console.log('Token Endpoint:', `${accountsServer}/oauth/v2/token`);
     
-    console.log('🔄 Using redirect URI:', redirectUri);
-    console.log('🔄 NODE_ENV:', process.env.NODE_ENV);
-    console.log('🔄 ZOHO_REDIRECT_URI:', process.env.ZOHO_REDIRECT_URI);
-    
-    // Exchange authorization code for tokens
-    const requestData = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: process.env.ZOHO_CLIENT_ID,
-      client_secret: process.env.ZOHO_CLIENT_SECRET,
-      redirect_uri: redirectUri,
-      code: code
-    });
-
-    console.log('📤 Request Data:');
-    console.log('grant_type:', 'authorization_code');
-    console.log('client_id:', process.env.ZOHO_CLIENT_ID);
-    console.log('client_secret:', process.env.ZOHO_CLIENT_SECRET ? '***SET***' : '***MISSING***');
-    console.log('redirect_uri:', redirectUri);
-    console.log('code:', code);
-    console.log('');
-
-    const tokenResponse = await axios.post('https://accounts.zoho.com/oauth/v2/token', 
-      requestData, {
+    // Use dynamic accounts-server for token exchange
+    const tokenResponse = await axios.post(`${accountsServer}/oauth/v2/token`, 
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI || 'https://zoho.techlab.live/oauth/callback'
+      }), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       }
     );
 
-    console.log('📊 Token Response Status:', tokenResponse.status);
-    console.log('📊 Token Response Data:', JSON.stringify(tokenResponse.data, null, 2));
-    console.log('📊 Token Response Type:', typeof tokenResponse.data);
-    console.log('📊 Token Response Keys:', Object.keys(tokenResponse.data));
+    console.log('✅ Token exchange successful!');
+    console.log('Response:', JSON.stringify(tokenResponse.data, null, 2));
 
-    // Check if we got an error
-    if (tokenResponse.data.error) {
-      console.error('❌ Token exchange failed:', tokenResponse.data.error);
-      console.error('❌ This usually means:');
-      console.error('   - The redirect URI is not configured in your Zoho app');
-      console.error('   - The authorization code has expired');
-      console.error('   - The authorization code was already used');
-      console.error('   - The client credentials are incorrect');
-      
-      return res.status(400).json({
-        error: 'Token exchange failed',
-        details: tokenResponse.data.error,
-        suggestions: [
-          'Check if https://zoho.techlab.live/oauth/callback is configured in your Zoho app',
-          'Verify your client ID and client secret are correct',
-          'Get a fresh authorization code (they expire quickly)',
-          'Check that your Zoho app has the correct scopes configured'
-        ]
-      });
-    }
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
     // Store tokens
-    tokenStore = {
-      accessToken: tokenResponse.data.access_token,
-      refreshToken: tokenResponse.data.refresh_token,
-      expiresAt: Date.now() + (tokenResponse.data.expires_in * 1000)
+    tokens = {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt: Date.now() + (expires_in * 1000)
     };
 
-    console.log('✅ Tokens obtained and stored successfully');
-    console.log('🔑 REFRESH TOKEN FOR .env FILE:', tokenResponse.data.refresh_token);
-    console.log('⏰ Token expires in:', tokenResponse.data.expires_in, 'seconds');
-    
+    console.log('\n✅ Access Token:', access_token);
+    console.log('🔁 Refresh Token:', refresh_token);
+    console.log('⏳ Expires In:', expires_in, 'seconds');
+
     res.json({
       success: true,
-      message: 'OAuth authorization completed successfully!',
-      tokensReceived: true,
-      expiresIn: tokenResponse.data.expires_in,
-      refreshToken: tokenResponse.data.refresh_token, // Include in response for easy copying
+      message: 'OAuth2 authorization completed successfully!',
+      tokens: {
+        accessToken: access_token ? '***RECEIVED***' : '***MISSING***',
+        refreshToken: refresh_token ? '***RECEIVED***' : '***MISSING***',
+        expiresIn: expires_in
+      },
+      envConfig: {
+        ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID,
+        ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET ? '***SET***' : '***MISSING***',
+        ZOHO_REFRESH_TOKEN: refresh_token,
+        ZOHO_REDIRECT_URI: process.env.ZOHO_REDIRECT_URI || 'https://zoho.techlab.live/oauth/callback'
+      },
       instructions: [
-        'Tokens have been stored in memory',
-        'Use /auth/status to check token status',
-        'The refresh token is long-lived and will be used for future requests',
-        'Copy the refresh token above to your .env file'
+        'Copy the ZOHO_REFRESH_TOKEN to your .env file',
+        'Use /test to verify the tokens work',
+        'Use /status to check token status'
       ]
     });
-    
+
   } catch (error) {
-    console.error('❌ Error exchanging code for tokens:', error.response?.data || error.message);
+    console.error('❌ Token exchange failed:', error.response?.data || error.message);
+    
     res.status(500).json({
-      error: 'Failed to exchange authorization code for tokens',
-      details: error.response?.data || error.message
+      error: 'Token exchange failed',
+      details: error.response?.data || error.message,
+      suggestions: [
+        'Check your ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET',
+        'Verify the redirect URI in your Zoho app',
+        'Make sure your Zoho app is active',
+        'Try getting a fresh authorization code'
+      ]
     });
   }
 });
 
-// Auth status endpoint
-app.get('/auth/status', (req, res) => {
-  const hasTokens = !!(tokenStore.accessToken && tokenStore.refreshToken);
-  const isExpired = tokenStore.expiresAt && Date.now() > tokenStore.expiresAt;
-  
+// Check token status
+app.get('/status', (req, res) => {
   res.json({
-    hasTokens,
-    isExpired,
-    expiresAt: tokenStore.expiresAt ? new Date(tokenStore.expiresAt).toISOString() : null,
-    hasRefreshToken: !!tokenStore.refreshToken
+    hasTokens: !!(tokens.accessToken && tokens.refreshToken),
+    isExpired: tokens.expiresAt ? Date.now() > tokens.expiresAt : null,
+    expiresAt: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null
   });
+});
+
+// Test the tokens
+app.get('/test', async (req, res) => {
+  if (!tokens.accessToken) {
+    return res.status(400).json({
+      error: 'No access token available',
+      instructions: 'Complete the OAuth2 flow first using /auth'
+    });
+  }
+
+  try {
+    console.log('🧪 Testing access token...');
+    
+    const response = await axios.get('https://www.zohoapis.com/crm/v2/org', {
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${tokens.accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Access token is valid!',
+      organization: response.data.org?.[0]?.name || 'Unknown',
+      response: response.data
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: 'Token test failed',
+      details: error.response?.data || error.message
+    });
+  }
 });
 
 // Zoho webhook endpoint
@@ -188,22 +224,7 @@ app.post('/zoho-webhook', async (req, res) => {
       });
     }
 
-    // Check if deal was created after deployment date
-    const deploymentDate = new Date(config.DEPLOYMENT_DATE);
-    const dealCreatedDate = Created_Time ? new Date(Created_Time) : new Date();
-    
-    if (dealCreatedDate < deploymentDate) {
-      console.log(`Skipping deal ${Deal_ID} - created before deployment date (${config.DEPLOYMENT_DATE})`);
-      return res.status(200).json({
-        success: true,
-        message: `Deal ${Deal_ID} skipped - created before deployment date`,
-        skipped: true,
-        dealId: Deal_ID,
-        deploymentDate: config.DEPLOYMENT_DATE
-      });
-    }
-
-    console.log(`Processing deal: ${Deal_Name} (ID: ${Deal_ID}) created on ${dealCreatedDate}`);
+    console.log(`Processing deal: ${Deal_Name} (ID: ${Deal_ID}) created on ${Created_Time || 'unknown time'}`);
 
     // Create folder in Google Drive
     const folderId = await createGoogleDriveFolder(Deal_Name, {
@@ -257,23 +278,19 @@ app.post('/zoho-webhook', async (req, res) => {
   }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Homepage: https://zoho.techlab.live/`);
-  console.log(`🔗 Webhook endpoint: https://zoho.techlab.live/zoho-webhook`);
-  console.log(`💚 Health check: https://zoho.techlab.live/health`);
+  console.log(`🚀 Zoho CRM to Google Drive Integration running on port ${PORT}`);
+  console.log(`📱 Homepage: http://localhost:${PORT}`);
+  console.log(`🔗 Auth URL: http://localhost:${PORT}/auth`);
+  console.log(`📋 Status: http://localhost:${PORT}/status`);
+  console.log(`🧪 Test: http://localhost:${PORT}/test`);
+  console.log(`🔔 Webhook: http://localhost:${PORT}/zoho-webhook`);
 }); 
