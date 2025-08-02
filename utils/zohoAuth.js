@@ -183,9 +183,15 @@ class ZohoAuth {
    */
   async testConnection() {
     try {
-      const response = await this.makeRequest('GET', 'org');
+      // Try to get deals instead of org, as it's more likely to work with our scope
+      const response = await this.makeRequest('GET', 'Deals?per_page=1');
       console.log('✅ Zoho CRM connection test successful');
-      return response;
+      return {
+        success: true,
+        message: 'Connection successful',
+        deals: response.data || [],
+        total: response.info?.count || 0
+      };
     } catch (error) {
       console.error('❌ Zoho CRM connection test failed:', error.message);
       throw error;

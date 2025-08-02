@@ -205,8 +205,8 @@ app.get('/test', async (req, res) => {
     res.json({
       success: true,
       message: 'Access token is valid!',
-      organization: response.org?.[0]?.name || 'Unknown',
-      response: response
+      connection: response,
+      dealsCount: response.total || 0
     });
 
   } catch (error) {
