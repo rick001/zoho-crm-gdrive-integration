@@ -1,7 +1,15 @@
 const express = require('express');
 const axios = require('axios');
-const open = require('open');
 require('dotenv').config();
+
+// Try to import open package, but don't fail if it's not available
+let open;
+try {
+  open = require('open');
+} catch (error) {
+  console.log('⚠️  open package not available - browser opening disabled');
+  open = null;
+}
 
 const { createGoogleDriveFolder } = require('./utils/googleDrive');
 const { validateWebhook, extractDealInfo, logWebhookDetails } = require('./utils/webhookValidation');
@@ -50,17 +58,24 @@ app.get('/auth', (req, res) => {
     `prompt=consent&` +
     `redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-  console.log("🔗 Opening Zoho OAuth consent screen...");
-  open(authUrl);
+  // Try to open browser if open package is available
+  if (open) {
+    console.log("🔗 Opening Zoho OAuth consent screen...");
+    open(authUrl).catch(err => {
+      console.log('⚠️  Could not open browser automatically:', err.message);
+    });
+  } else {
+    console.log("🔗 Browser opening not available on this server");
+  }
 
   res.json({
     message: 'OAuth2 Authorization URL',
     authUrl: authUrl,
     instructions: [
-      'Browser should open automatically with the authorization URL',
-      'If not, copy the authUrl above and open it manually',
+      'Copy the authUrl above and open it in your browser',
       'Authorize the application',
-      'You will be redirected to /oauth/callback'
+      'You will be redirected to /oauth/callback',
+      'Copy the refresh token from the response to your .env file'
     ]
   });
 });
