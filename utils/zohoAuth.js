@@ -8,15 +8,23 @@ class ZohoAuth {
     this.accessToken = null;
     this.expiresAt = null;
     this.accountsServer = null; // Will be set dynamically
+    this.apiDomain = 'https://www.zohoapis.com'; // Default API domain
   }
 
   /**
    * Set tokens from server's token management
    */
-  setTokens(accessToken, refreshToken, expiresIn) {
+  setTokens(accessToken, refreshToken, expiresIn, apiDomain = null) {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
     this.expiresAt = Date.now() + (expiresIn * 1000);
+    
+    // Update API domain if provided
+    if (apiDomain) {
+      this.apiDomain = apiDomain;
+      console.log('🔧 API domain set to:', apiDomain);
+    }
+    
     console.log('🔧 Tokens set from server memory');
   }
 
@@ -73,6 +81,12 @@ class ZohoAuth {
       this.accessToken = response.data.access_token;
       this.expiresAt = Date.now() + (response.data.expires_in * 1000);
 
+      // Update API domain if provided in response
+      if (response.data.api_domain) {
+        this.apiDomain = response.data.api_domain;
+        console.log('🔧 API domain updated to:', this.apiDomain);
+      }
+
       console.log('✅ Access token refreshed successfully');
       return this.accessToken;
 
@@ -90,7 +104,7 @@ class ZohoAuth {
     
     const config = {
       method,
-      url: `https://www.zohoapis.com/crm/v2/${endpoint}`,
+      url: `${this.apiDomain}/crm/v2/${endpoint}`,
       headers: {
         'Authorization': `Zoho-oauthtoken ${accessToken}`,
         'Content-Type': 'application/json'

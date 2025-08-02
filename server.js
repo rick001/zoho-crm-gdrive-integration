@@ -127,7 +127,7 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('✅ Token exchange successful!');
     console.log('Response:', JSON.stringify(tokenResponse.data, null, 2));
 
-    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+    const { access_token, refresh_token, expires_in, api_domain } = tokenResponse.data;
 
     // Store tokens
     tokens = {
@@ -138,7 +138,7 @@ app.get('/oauth/callback', async (req, res) => {
 
     // Update zohoAuth module with the new tokens
     const zohoAuth = require('./utils/zohoAuth');
-    zohoAuth.setTokens(access_token, refresh_token, expires_in);
+    zohoAuth.setTokens(access_token, refresh_token, expires_in, api_domain);
     zohoAuth.setAccountsServer(accountsServer);
 
     console.log('\n✅ Access Token:', access_token);
