@@ -5,10 +5,19 @@ class ZohoAuth {
   constructor() {
     this.clientId = process.env.ZOHO_CLIENT_ID;
     this.clientSecret = process.env.ZOHO_CLIENT_SECRET;
-    this.refreshToken = process.env.ZOHO_REFRESH_TOKEN;
     this.accessToken = null;
     this.expiresAt = null;
     this.accountsServer = null; // Will be set dynamically
+  }
+
+  /**
+   * Set tokens from server's token management
+   */
+  setTokens(accessToken, refreshToken, expiresIn) {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
+    this.expiresAt = Date.now() + (expiresIn * 1000);
+    console.log('🔧 Tokens set from server memory');
   }
 
   /**
@@ -28,7 +37,11 @@ class ZohoAuth {
       return this.accessToken;
     }
 
-    // If no refresh token, throw error
+    // If no refresh token, try to get from environment
+    if (!this.refreshToken) {
+      this.refreshToken = process.env.ZOHO_REFRESH_TOKEN;
+    }
+
     if (!this.refreshToken) {
       throw new Error('No refresh token available. Please complete OAuth2 setup first.');
     }
@@ -104,7 +117,10 @@ class ZohoAuth {
     console.log(`🔄 Updating deal ${dealId}:`, updateData);
     
     const data = {
-      data: [updateData]
+      data: [{
+        id: dealId,
+        ...updateData
+      }]
     };
 
     return await this.makeRequest('PUT', `Deals/${dealId}`, data);
@@ -114,7 +130,6 @@ class ZohoAuth {
    * Get a deal from Zoho CRM
    */
   async getDeal(dealId) {
-    console.log(`📥 Getting deal ${dealId}...`);
     return await this.makeRequest('GET', `Deals/${dealId}`);
   }
 
@@ -122,13 +137,13 @@ class ZohoAuth {
    * Append a note to a deal
    */
   async appendDealNote(dealId, noteContent) {
-    console.log(`📝 Appending note to deal ${dealId}...`);
+    console.log(`📝 Appending note to deal ${dealId}:`, noteContent.substring(0, 50) + '...');
     
     const data = {
       data: [{
         Parent_Id: dealId,
-        Note_Title: 'Google Drive Folder Created',
-        Note_Content: noteContent
+        Note_Content: noteContent,
+        Note_Title: 'Google Drive Integration'
       }]
     };
 
@@ -140,15 +155,11 @@ class ZohoAuth {
    */
   async testConnection() {
     try {
-      console.log('🧪 Testing Zoho CRM connection...');
       const response = await this.makeRequest('GET', 'org');
-      
-      console.log('✅ Zoho CRM connection successful!');
-      console.log('Organization:', response.org?.[0]?.name || 'Unknown');
-      
+      console.log('✅ Zoho CRM connection test successful');
       return response;
     } catch (error) {
-      console.error('❌ Zoho CRM connection failed:', error.message);
+      console.error('❌ Zoho CRM connection test failed:', error.message);
       throw error;
     }
   }

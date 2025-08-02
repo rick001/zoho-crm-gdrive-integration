@@ -136,6 +136,11 @@ app.get('/oauth/callback', async (req, res) => {
       expiresAt: Date.now() + (expires_in * 1000)
     };
 
+    // Update zohoAuth module with the new tokens
+    const zohoAuth = require('./utils/zohoAuth');
+    zohoAuth.setTokens(access_token, refresh_token, expires_in);
+    zohoAuth.setAccountsServer(accountsServer);
+
     console.log('\n✅ Access Token:', access_token);
     console.log('🔁 Refresh Token:', refresh_token);
     console.log('⏳ Expires In:', expires_in, 'seconds');
@@ -188,28 +193,17 @@ app.get('/status', (req, res) => {
 
 // Test the tokens
 app.get('/test', async (req, res) => {
-  if (!tokens.accessToken) {
-    return res.status(400).json({
-      error: 'No access token available',
-      instructions: 'Complete the OAuth2 flow first using /auth'
-    });
-  }
-
   try {
     console.log('🧪 Testing access token...');
     
-    const response = await axios.get('https://www.zohoapis.com/crm/v2/org', {
-      headers: {
-        'Authorization': `Zoho-oauthtoken ${tokens.accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const zohoAuth = require('./utils/zohoAuth');
+    const response = await zohoAuth.testConnection();
 
     res.json({
       success: true,
       message: 'Access token is valid!',
-      organization: response.data.org?.[0]?.name || 'Unknown',
-      response: response.data
+      organization: response.org?.[0]?.name || 'Unknown',
+      response: response
     });
 
   } catch (error) {

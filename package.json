@@ -10,7 +10,8 @@
     "test:webhook": "node test-webhook.js",
     "test:deal-update": "node test-deal-update.js",
     "check-env": "node scripts/check-env.js",
-    "get-auth-url": "node get-auth-url.js"
+    "get-auth-url": "node get-auth-url.js",
+    "check-config": "node check-env-config.js"
   },
   "keywords": ["zoho", "google-drive", "crm", "integration"],
   "author": "",
